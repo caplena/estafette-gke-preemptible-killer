@@ -147,10 +147,13 @@ func main() {
 
 			for _, node := range nodes.Items {
 				waitGroup.Add(1)
-				err := processNode(kubernetes, node)
+				res, err := processNode(kubernetes, node)
 				waitGroup.Done()
 
-				if err != nil {
+				// If the node was deleted, stop the loop and go to sleep again
+				if res == true {
+					break
+				} else if err != nil {
 					nodeTotals.With(prometheus.Labels{"status": "failed"}).Inc()
 					log.Error().
 						Err(err).
@@ -216,7 +219,7 @@ func getDesiredNodeState(k KubernetesClient, node *apiv1.Node) (state GKEPreempt
 }
 
 // processNode returns the time to delete a node after n minutes
-func processNode(k KubernetesClient, node *apiv1.Node) (err error) {
+func processNode(k KubernetesClient, node *apiv1.Node) (res bool, err error) {
 	// get current node state
 	state := getCurrentNodeState(node)
 
@@ -328,7 +331,7 @@ func processNode(k KubernetesClient, node *apiv1.Node) (err error) {
 			Str("host", *node.Metadata.Name).
 			Msg("Node deleted")
 
-		return
+		return true, nil
 	}
 
 	nodeTotals.With(prometheus.Labels{"status": "skipped"}).Inc()
